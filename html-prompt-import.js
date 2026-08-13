@@ -208,6 +208,59 @@ function importHtmlPromptDocument(html, fileName) {
 
 installHtmlPromptImporter();
 
+// Use Unicode escapes so multilingual field labels remain stable after editing or publishing.
+const stableHtmlFieldLabels = {
+  title: ["\u6807\u9898", "\u63d0\u793a\u8bcd\u6807\u9898", "\u63d0\u793a\u8bcd\u5c0f\u6807\u9898", "\u5c0f\u6807\u9898", "title", "prompt title", "prompt subtitle", "subtitle", "t\u00edtulo", "subt\u00edtulo", "titre", "sous titre", "titulo", "subtitulo", "\u30bf\u30a4\u30c8\u30eb", "\u5c0f\u898b\u51fa\u3057", "\uc81c\ubaa9", "\u043d\u0430\u0437\u0432\u0430\u043d\u0438\u0435"],
+  prompt: ["\u63d0\u793a\u8bcd", "\u63d0\u793a\u8bcd\u5185\u5bb9", "\u63d0\u793a\u8bcd\u6b63\u6587", "\u63d0\u793a\u8a5e", "\u63d0\u793a\u8a5e\u5185\u5bb9", "\u63d0\u793a\u8a5e\u6b63\u6587", "prompt", "prompt text", "prompt content", "prompt description", "instrucci\u00f3n", "instrucciones", "texte du prompt", "contenu du prompt", "texto do prompt", "conte\u00fado do prompt", "\u30d7\u30ed\u30f3\u30d7\u30c8", "\u30d7\u30ed\u30f3\u30d7\u30c8\u6587", "\u30d7\u30ed\u30f3\u30d7\u30c8\u5185\u5bb9", "\ud504\ub86c\ud504\ud2b8", "\uc9c0\uc2dc\ubb38", "\u043f\u0440\u043e\u043c\u043f\u0442"],
+  alt: ["\u56fe\u7247alt", "\u56fe\u7247 alt", "\u56fe\u7247alt\u6807\u7b7e", "\u56fe\u7247 alt \u6807\u7b7e", "alt", "alt\u6807\u7b7e", "alt \u6807\u7b7e", "alt text", "alt label", "image alt", "image alt text", "texto alternativo", "etiqueta alt", "texto alt", "texte alternatif", "texte alt", "texto alternativo da imagem", "texto alt da imagem", "\u753b\u50cfalt", "\u753b\u50cf alt", "\u753b\u50cfalt\u30bf\u30b0", "\u4ee3\u66ff\u30c6\u30ad\u30b9\u30c8", "\uc774\ubbf8\uc9c0 alt", "\ub300\uccb4 \ud14d\uc2a4\ud2b8", "\u0430\u043b\u044c\u0442\u0435\u0440\u043d\u0430\u0442\u0438\u0432\u043d\u044b\u0439 \u0442\u0435\u043a\u0441\u0442", "alt \u0442\u0435\u043a\u0441\u0442"]
+};
+
+const normalizeStableHtmlLabel = value => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[\s:\uFF1A_-]+/g, "");
+htmlFieldKey = function (value) {
+  const raw = String(value || "").trim();
+  const normalized = normalizeStableHtmlLabel(raw);
+  const hasSeparator = /[:\uFF1A-]/.test(raw);
+  for (const [key, labels] of Object.entries(stableHtmlFieldLabels)) {
+    if (labels.some(label => {
+      const expected = normalizeStableHtmlLabel(label);
+      return normalized === expected || (hasSeparator && normalized.startsWith(expected));
+    })) return key;
+  }
+  return "";
+};
+
+function extractEntryLabeledPromptGroups(documentData) {
+  const groups = [];
+  let currentGroup = null;
+  const startGroup = heading => {
+    currentGroup = { heading: htmlText(heading), items: [] };
+    groups.push(currentGroup);
+  };
+  [...documentData.querySelectorAll("h2,.entry")].forEach(node => {
+    if (node.matches("h2")) {
+      startGroup(node);
+      return;
+    }
+    const labels = [...node.querySelectorAll("*")].filter(child => child.children.length === 0 && htmlFieldKey(child.textContent));
+    const fields = { title: "", prompt: "", alt: "" };
+    labels.forEach(label => {
+      const key = htmlFieldKey(label.textContent);
+      if (key && !fields[key]) fields[key] = htmlFieldValue(label);
+    });
+    if (!fields.title || !fields.prompt) return;
+    if (!currentGroup) startGroup("未分类提示词");
+    currentGroup.items.push({ title: fields.title, prompt: fields.prompt, alt: fields.alt || fields.title });
+  });
+  return groups.filter(groupData => groupData.items.length);
+}
+
+const extractHtmlPromptGroupsBeforeEntryLabels = extractHtmlPromptGroups;
+extractHtmlPromptGroups = function (html) {
+  const documentData = new DOMParser().parseFromString(html, "text/html");
+  const entryGroups = extractEntryLabeledPromptGroups(documentData);
+  return entryGroups.length ? entryGroups : extractHtmlPromptGroupsBeforeEntryLabels(html);
+};
+
 const parseDocumentBeforeManualNumberCleanup = parseDocument;
 parseDocument = function () {
   const sourceText = $("source")?.value || "";
