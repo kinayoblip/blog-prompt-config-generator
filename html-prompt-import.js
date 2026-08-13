@@ -36,29 +36,27 @@ function installHtmlPromptImporter() {
     panel.style.background = active ? "#f0efff" : "#fbfcfe";
   };
   const isFileDrag = event => [...(event.dataTransfer?.types || [])].includes("Files");
-  const preventFileNavigation = event => {
-    if (isFileDrag(event)) event.preventDefault();
-  };
+  const hasHtmlFile = event => [...(event.dataTransfer?.files || [])].some(file => /\.html?$/i.test(file.name) || file.type === "text/html");
+  const isImageDrop = target => target instanceof Element && target.closest("#imageDrop");
   document.addEventListener("dragover", event => {
-    if (!isFileDrag(event)) return;
+    if (!isFileDrag(event) || isImageDrop(event.target)) return;
     event.preventDefault();
     event.stopPropagation();
-    setDragState(true);
+    setDragState(hasHtmlFile(event));
   }, true);
   document.addEventListener("dragleave", event => {
     if (event.clientX <= 0 || event.clientY <= 0 || event.clientX >= window.innerWidth || event.clientY >= window.innerHeight) setDragState(false);
   }, true);
   document.addEventListener("drop", event => {
-    if (!isFileDrag(event)) return;
+    if (!isFileDrag(event) || isImageDrop(event.target)) return;
     event.preventDefault();
     event.stopPropagation();
     setDragState(false);
     handleFiles([...(event.dataTransfer?.files || [])]);
   }, true);
-  drop.ondragover = event => { event.preventDefault(); event.stopPropagation(); setDragState(true); };
+  drop.ondragover = event => { if(!isFileDrag(event)) return; event.preventDefault(); event.stopPropagation(); setDragState(true); };
   drop.ondragleave = event => { event.preventDefault(); setDragState(false); };
-  drop.ondrop = event => { event.preventDefault(); event.stopPropagation(); setDragState(false); handleFiles([...event.dataTransfer.files]); };
-  window.addEventListener("dragover", preventFileNavigation, false);
+  drop.ondrop = event => { if(!isFileDrag(event)) return; event.preventDefault(); event.stopPropagation(); setDragState(false); handleFiles([...event.dataTransfer.files]); };
 }
 
 function htmlText(element) {
@@ -219,5 +217,17 @@ parseDocument = function () {
     if (cleaned !== sourceText.trim()) $("source").value = cleaned;
   }
   parseDocumentBeforeManualNumberCleanup();
+};
+$("parseBtn").onclick = parseDocument;
+
+const parseDocumentBeforeStatusSummary = parseDocument;
+parseDocument = function () {
+  parseDocumentBeforeStatusSummary();
+  if (!groups.length) return;
+  const itemCount = allItems().length;
+  const mode = $("componentMode")?.value || "merge";
+  const componentCount = mode === "split" ? itemCount : mode === "groups" ? groups.length : (itemCount ? 1 : 0);
+  const issues = validate(false);
+  status("parseStatus", `已识别 ${componentCount} 个分组、${itemCount} 条提示词。${issues.length ? `有 ${issues.length} 处需检查。` : ""}`, issues.length ? "err" : "ok");
 };
 $("parseBtn").onclick = parseDocument;
