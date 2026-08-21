@@ -261,6 +261,66 @@ extractHtmlPromptGroups = function (html) {
   return entryGroups.length ? entryGroups : extractHtmlPromptGroupsBeforeEntryLabels(html);
 };
 
+function extractHeadingParagraphPromptGroups(documentData) {
+  const groups = [];
+  [...documentData.querySelectorAll("h3")].forEach(headingNode => {
+    const prompts = [];
+    let sibling = headingNode.nextElementSibling;
+    while (sibling && sibling.tagName === "P") {
+      const prompt = String(sibling.textContent || "").trim();
+      if (prompt.length >= 80) prompts.push(prompt);
+      sibling = sibling.nextElementSibling;
+    }
+    if (prompts.length < 2) return;
+    const heading = htmlText(headingNode);
+    groups.push({
+      heading,
+      items: prompts.map((prompt, index) => ({
+        title: `${heading} ${index + 1}`,
+        prompt,
+        alt: `${heading} ${index + 1}`
+      }))
+    });
+  });
+  return groups;
+}
+
+const extractHtmlPromptGroupsBeforeHeadingParagraphs = extractHtmlPromptGroups;
+extractHtmlPromptGroups = function (html) {
+  const documentData = new DOMParser().parseFromString(html, "text/html");
+  const headingGroups = extractHeadingParagraphPromptGroups(documentData);
+  return headingGroups.length ? headingGroups : extractHtmlPromptGroupsBeforeHeadingParagraphs(html);
+};
+
+function extractPromptClassCardGroups(documentData) {
+  const groups = [];
+  let currentGroup = null;
+  [...documentData.querySelectorAll("h3,.prompt")].forEach(node => {
+    if (node.matches("h3")) {
+      currentGroup = { heading: htmlText(node), items: [] };
+      groups.push(currentGroup);
+      return;
+    }
+    const title = htmlText(node.querySelector("h4,h3"));
+    const prompt = String(node.querySelector(".prompt-text")?.textContent || "").trim();
+    const alt = String(node.querySelector("img")?.getAttribute("alt") || "").trim() || title;
+    if (!title || !prompt) return;
+    if (!currentGroup) {
+      currentGroup = { heading: "未分类提示词", items: [] };
+      groups.push(currentGroup);
+    }
+    currentGroup.items.push({ title, prompt, alt });
+  });
+  return groups.filter(groupData => groupData.items.length);
+}
+
+const extractHtmlPromptGroupsBeforePromptClassCards = extractHtmlPromptGroups;
+extractHtmlPromptGroups = function (html) {
+  const documentData = new DOMParser().parseFromString(html, "text/html");
+  const cardGroups = extractPromptClassCardGroups(documentData);
+  return cardGroups.length ? cardGroups : extractHtmlPromptGroupsBeforePromptClassCards(html);
+};
+
 const parseDocumentBeforeManualNumberCleanup = parseDocument;
 parseDocument = function () {
   const sourceText = $("source")?.value || "";
