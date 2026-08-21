@@ -85,4 +85,39 @@ parseDocument=function(){let text=$("source").value.trim(),fields=selectedFields
 function parseNumericGroups(text){if(!$("componentMode")||$("componentMode").value!=="groups")return null;let lines=text.replace(/\r\n?/g,"\n").split("\n"),sections=[],current=null,expected=1;for(const line of lines){if(line.trim()===String(expected)){current={name:`\u5206\u7ec4 ${expected}`,lines:[]};sections.push(current);expected++;continue}if(current)current.lines.push(line)}if(!sections.length)return null;let result=[];for(const section of sections){let parsed=parseSelectedBlocks(section.lines.join("\n"));if(!parsed||!parsed[0].items.length)continue;result.push({sort:result.length+1,title:"",desc:"",platform:"",component_id:String(result.length+1),type:$("componentType").value.trim()||"component2_prompt_component",expand:true,name:section.name,items:parsed[0].items})}return result.length?result:null}
 parseDocument=function(){let text=$("source").value.trim(),fields=selectedFields();if(!fields.length){status("parseStatus","\u8bf7\u81f3\u5c11\u52fe\u9009\u4e00\u4e2a\u6587\u6863\u5b57\u6bb5\u3002","err");return}if(!text){status("parseStatus","\u8bf7\u5148\u7c98\u8d34\u6587\u6863\u5185\u5bb9\u3002","err");return}let numeric=parseNumericGroups(text),marked=parseMarkedGroups(text),hasLabels=normalizeLines(text).some(line=>labelLine(line)),parsed=parseJson(text)||parseTable(text)||numeric||marked||(hasLabels?parseTagged(text):parseSelectedBlocks(text));if(!parsed||!parsed.length){status("parseStatus",`\u672a\u8bc6\u522b\u5230\u5b8c\u6574\u7684\u300c${fields.map(fieldName).join(" - ")}\u300d\u6761\u76ee\u3002`,"err");return}groups=parsed;renumber();if(groups.length>1&&$("componentMode"))$("componentMode").value="groups";render();let issues=validate(false),count=groups.reduce((n,g)=>n+g.items.length,0);status("parseStatus",`\u5df2\u8bc6\u522b ${groups.length} \u4e2a\u5206\u7ec4\u3001${count} \u6761\u63d0\u793a\u8bcd${groups.length>1?"\uff0c\u5c06\u751f\u6210 "+groups.length+" \u4e2a\u7ec4\u4ef6":""}${issues.length?`\uff0c\u6709 ${issues.length} \u5904\u9700\u68c0\u67e5`:"\u3002"}`,issues.length?"err":"ok")};$("parseBtn").onclick=parseDocument;
 if($("componentMode")&&$("componentMode").options[2])$("componentMode").options[2].textContent="\u6309\u6570\u5b57\u5206\u7ec4\uff1a1\u30012\u30013... \u6bcf\u4e2a\u6570\u5b57\u5f00\u59cb\u4e00\u4e2a\u7ec4\u4ef6";if($("fieldHint")){let note=document.createElement("div");note.style.cssText="margin-top:6px;color:#514dbb;font-weight:700";note.textContent="\u9009\u62e9\u300c\u6309\u6570\u5b57\u5206\u7ec4\u300d\u540e\uff0c\u5355\u72ec\u4e00\u884c\u7684 1\u30012\u30013... \u4ee3\u8868\u65b0\u7ec4\u4ef6\u5f00\u59cb\uff1b\u6bcf\u7ec4\u6570\u91cf\u53ef\u4e0d\u540c\u3002";$("fieldHint").appendChild(note)}
-</script><script src=html-prompt-import.js></script><script src=model-fields.js></script></body></html>
+</script><script src=html-prompt-import.js></script><script src=model-fields.js></script><script>
+const cloudUploadService = "https://blog-prompt-config-generator.onrender.com";
+helperReady = async function () {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 70000);
+  try {
+    const response = await fetch(`${cloudUploadService}/health`, { signal: controller.signal });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+uploadAsset = async function (asset) {
+  asset.status = "uploading";
+  renderImages();
+  const response = await fetch(`${cloudUploadService}/upload`, {
+    method: "POST",
+    headers: {
+      "Content-Type": asset.file.type || imageType(asset.name),
+      "X-File-Name": encodeURIComponent(asset.name)
+    },
+    body: asset.file
+  });
+  const result = await response.json();
+  if (!response.ok || !result.url) throw new Error(result.error || "Upload failed");
+  asset.url = result.url;
+  asset.status = "done";
+  return result.url;
+};
+const cloudUploadNotice = $("imagePanel")?.querySelector(".body")?.firstElementChild;
+if (cloudUploadNotice) {
+  cloudUploadNotice.textContent = "\u4e91\u7aef\u4e0a\u4f20\u670d\u52a1\u5df2\u542f\u7528\uff0c\u53ef\u76f4\u63a5\u6279\u91cf\u4e0a\u4f20\u56fe\u7247\u3002\u514d\u8d39\u670d\u52a1\u7b2c\u4e00\u6b21\u8bf7\u6c42\u53ef\u80fd\u9700\u7b49\u5f85\u7ea6 1 \u5206\u949f\u3002";
+}
+</script></body></html>
