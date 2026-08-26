@@ -114,8 +114,7 @@ uploadAsset = async function (asset) {
       method: "POST",
       headers: {
         "Content-Type": asset.file.type || imageType(asset.name),
-        "X-File-Name": encodeURIComponent(asset.name),
-        "X-Asset-Kind": asset.kind || ""
+        "X-File-Name": encodeURIComponent(asset.name)
       },
       body: asset.file
     });
