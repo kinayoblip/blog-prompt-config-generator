@@ -134,6 +134,58 @@ const cloudUploadNotice = $("imagePanel")?.querySelector(".body")?.firstElementC
 if (cloudUploadNotice) {
   cloudUploadNotice.textContent = "当前仅支持批量上传图片。";
 }
+if (!localPage && location.protocol !== "file:") {
+  const seaArtUploadUrl = "https://www.seaart.ai/api/upload/image-v2";
+  const seaArtDeviceKey = "seaart-blog-upload-device-id";
+  let seaArtDeviceId = "";
+
+  try {
+    seaArtDeviceId = localStorage.getItem(seaArtDeviceKey) || crypto.randomUUID();
+    localStorage.setItem(seaArtDeviceKey, seaArtDeviceId);
+  } catch {
+    seaArtDeviceId = crypto.randomUUID();
+  }
+
+  helperReady = async function () {
+    return true;
+  };
+
+  uploadAsset = async function (asset) {
+    asset.status = "uploading";
+    renderImages();
+    const form = new FormData();
+    form.append("file", asset.file, asset.name);
+    form.append("filename", asset.name);
+    form.append("category", "29");
+    let response;
+    try {
+      response = await fetch(seaArtUploadUrl, {
+        method: "POST",
+        headers: {
+          "X-Account-Id": seaArtDeviceId,
+          "X-Device-Id": seaArtDeviceId,
+          "X-Platform": "web",
+          "X-Project-Id": "seaart",
+          "X-App-Id": "web_global_seaart"
+        },
+        body: form
+      });
+    } catch {
+      throw new Error("无法连接 SeaArt 上传服务。");
+    }
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result?.status?.code !== 10000 || !result?.data?.url) {
+      throw new Error(result?.status?.msg || "SeaArt 上传失败。");
+    }
+    asset.url = result.data.url;
+    asset.status = "done";
+    return asset.url;
+  };
+
+  if (cloudUploadNotice) {
+    cloudUploadNotice.textContent = "线上图片将直接上传到 SeaArt。";
+  }
+}
  </script><script>
 const parseJsonBeforeSeaArtVideoLinks = parseJson;
 parseJson = function (text) {
